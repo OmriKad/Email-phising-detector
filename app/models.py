@@ -1,18 +1,20 @@
 """Pydantic models for Gmail API format and detection responses."""
-from typing import Optional, List
+from typing import Optional, List, Any
 from pydantic import BaseModel, Field
 
 
 class Header(BaseModel):
     """Email header following RFC 5322 format."""
-    name: str
-    value: str
+    # Using Optional[str] because some malformed headers might have null values
+    name: Optional[str] = None 
+    value: Optional[str] = None
 
 
 class MessagePartBody(BaseModel):
     """Message part body content."""
     data: Optional[str] = None
     size: Optional[int] = None
+    attachmentId: Optional[str] = None # Added this as it's common in Gmail API
 
 
 class MessagePart(BaseModel):
@@ -24,14 +26,21 @@ class MessagePart(BaseModel):
     body: Optional[MessagePartBody] = None
     parts: Optional[List["MessagePart"]] = None
 
+# CRITICAL: This line is required for recursive models in Pydantic v2
+MessagePart.model_rebuild()
+
 
 class GmailMessage(BaseModel):
     """Gmail message structure for phishing detection."""
     id: Optional[str] = None
     threadId: Optional[str] = None
     snippet: Optional[str] = None
-    payload: MessagePart
+    # Change to Optional to avoid 422 if payload is missing in metadata-only calls
+    payload: Optional[MessagePart] = None 
     raw: Optional[str] = None
+    # Allow extra fields from the Gmail API that aren't in our model
+    class Config:
+        extra = "ignore"
 
 
 class DetectedIndicator(BaseModel):

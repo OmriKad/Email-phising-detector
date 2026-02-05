@@ -3,6 +3,8 @@ import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
+from fastapi.exceptions import RequestValidationError
+from fastapi import Request
 from .models import GmailMessage, PhishingDetectionResponse
 from .phishing_detector import PhishingDetector
 from .domain_fetcher import domain_cache
@@ -32,6 +34,15 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """Logs the exact validation error to your terminal."""
+    logger.error(f"Validation Error: {exc.errors()}")
+    logger.error(f"Body: {await request.body()}")
+    return JSONResponse(
+        status_code=422,
+        content={"detail": exc.errors(), "body": str(await request.body())},
+    )
 
 @app.get("/")
 async def root():
