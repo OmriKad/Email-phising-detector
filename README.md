@@ -1,224 +1,200 @@
 # Email Phishing Detector
 
-A FastAPI-based backend service with Streamlit web interface that analyzes email content for phishing indicators using Gmail API format.
+Local, CPU-only phishing detection service with:
+- FastAPI backend (`/api/v1/detect`)
+- Streamlit frontend (`front/app.py`)
+- ML-only runtime (LightGBM + calibrator + deterministic guardrails)
 
-## Features
+## Current Runtime Model
 
-- **Streamlit Web Interface**: Interactive email composition form with visual risk analysis
-- **Gmail API Compatible**: Accepts email messages in Gmail API MessagePart format
-- **Multi-Indicator Detection**:
-  - Suspicious links (typosquatting, IP addresses, unknown domains)
-  - Spoofed sender domains (typosquatting detection)
-  - Urgent/pressure language patterns
-- **Weighted Scoring**: Combines indicators with configurable weights (sender 40%, links 40%, language 20%)
-- **Risk Classification**: Three-tier classification (safe, caution, major indicators)
-- **Domain Validation**: Uses Tranco top-1000 registrable domains with Levenshtein distance for typosquatting detection
-- **Domain Age Signal**: Flags domains younger than 30 days using WHOIS/RDAP lookups (cached)
-- **HTML Email Support**: Extracts URLs from HTML content (links, images, iframes) using BeautifulSoup
+This project serves **ML only** (no heuristic engine, no Tranco/WHOIS runtime scoring).
+
+What is preserved:
+- API endpoint contract (`POST /api/v1/detect`, `GET /`, `GET /api/v1/health`)
+- UI-facing fields (`risk_score`, `classification`, `indicators`, `message`, `model_version`, `decision_threshold`, `raw_probability`, `guardrail_*`)
+- Explainability compatibility keys in indicator details (`impact_share`, `positive_impact_share`, `impact_basis`)
 
 ## Requirements
 
-- Python 3.11+
-- uv package manager
+- Python `>=3.11`
+- [`uv`](https://docs.astral.sh/uv/)
 
-## Installation
+## Install
 
 ```bash
-# Install uv if not already installed
-curl -LsSf https://astral.sh/uv/install.sh | sh
-
-# Install dependencies
 uv sync
 ```
 
-## Running the Application
+If you plan to run tests too:
 
-### Option 1: Full Stack (FastAPI Backend + Streamlit Frontend)
+```bash
+uv sync --all-groups
+```
 
-**Terminal 1: Start FastAPI Backend**
+## Run
+
+### 1) Backend (FastAPI)
+
 ```bash
 uv run python main.py
 ```
-The API will be available at `http://localhost:8000`
 
-**Terminal 2: Start Streamlit UI**
+Backend URL: `http://localhost:8000`
+
+### 2) Frontend (Streamlit)
+
 ```bash
 uv run streamlit run front/app.py
 ```
-The web interface will be available at `http://localhost:8501`
 
-### Option 2: API Only
+Frontend URL: `http://localhost:8501`
 
-```bash
-# Start the FastAPI development server
-uv run python main.py
-```
-
-The API will be available at `http://localhost:8000`
-
-## Streamlit Web Interface
-
-Access the web interface at `http://localhost:8501` to:
-- Compose emails with From, To, Subject, and Body (Plain Text/HTML)
-- Load pre-configured example emails (Safe, Typosquatting, Suspicious Links, Multiple Indicators)
-- Analyze emails with visual gauge chart showing risk score (0-100%)
-- View detailed phishing indicators with severity levels
-- Get color-coded classification alerts
-
-**Example Usage:**
-1. Click an example email button in the sidebar
-2. Or manually fill in the email composition form
-3. Switch between Plain Text and HTML tabs for body content
-4. Click "Analyze Email" to detect phishing indicators
-5. Review the gauge chart, metrics, and detailed findings
-
-## API Endpoints
+## API
 
 ### `POST /api/v1/detect`
+Analyze one Gmail-format message.
 
-Analyze an email for phishing indicators.
-
-**Request Body**: Gmail message in Gmail API format
+Minimal request example:
 
 ```json
 {
-  "id": "msg123",
+  "id": "msg-1",
   "payload": {
     "headers": [
-      {"name": "From", "value": "sender@example.com"},
-      {"name": "Subject", "value": "Email Subject"}
+      {"name": "From", "value": "security@gogle.com"},
+      {"name": "Subject", "value": "Account Verification Required"}
     ],
-    "body": {"data": "base64url_encoded_content"},
+    "body": {
+      "data": "WW91ciBhY2NvdW50IHJlcXVpcmVzIGltbWVkaWF0ZSB2ZXJpZmljYXRpb24uIFBsZWFzZSBjbGljayBodHRwczovL2dvZ2xlLmNvbS92ZXJpZnk"
+    },
     "mimeType": "text/plain"
   }
 }
 ```
 
-**Response**:
-
-```json
-{
-  "risk_score": 0.75,
-  "classification": "Major indicators found!",
-  "indicators": [
-    {
-      "type": "spoofed_sender",
-      "description": "Sender domain 'gogle' is similar to 'google' (typosquatting)",
-      "severity": "high",
-      "details": {
-        "sender_domain": "gogle",
-        "similar_to": "google",
-        "levenshtein_distance": 1
-      }
-    }
-  ],
-  "message": "🚨 Warning: 1 major phishing indicator(s) detected!"
-}
-```
+Response includes:
+- `risk_score` (final post-policy score)
+- `raw_probability` (model probability before guardrail escalation)
+- `classification`
+- `indicators[]` with contribution/evidence/details
+- `model_version`, `decision_threshold`
+- `guardrail_applied`, `guardrail_reasons`
 
 ### `GET /`
-
-Health check endpoint.
+Basic service status.
 
 ### `GET /api/v1/health`
+ML runtime health and artifact presence, including:
+- runtime (`model_version`, threshold, model/calibrator loaded flags)
+- artifact paths and file existence checks
 
-Detailed health check with domain cache status.
+## Runtime Artifacts
 
-## Running Tests
+Expected in `models/`:
+- `phishing_lgbm_v1.txt`
+- `calibrator_v1.pkl`
+- `feature_schema_v1.json`
+
+Optional env overrides:
+- `PHISH_ML_MODEL_PATH`
+- `PHISH_ML_CALIBRATOR_PATH`
+- `PHISH_ML_SCHEMA_PATH`
+- `PHISH_ML_THRESHOLD`
+
+## Training
+
+### Prepare dataset
 
 ```bash
-# Run all tests
-uv run pytest
-
-# Run with coverage
-uv run pytest --cov=app
-
-# Run specific test file
-uv run pytest tests/test_phishing_detector.py
+uv run python scripts/training/prepare_dataset.py \
+  --input /path/to/raw.csv \
+  --output /path/to/normalized.csv
 ```
+
+Supports local `.csv`, `.jsonl/.ndjson`, `.parquet`, and `hf://...` parquet URIs.
+
+### Train model
+
+```bash
+uv run python scripts/training/train_lightgbm.py \
+  --dataset /path/to/normalized.csv
+```
+
+Optional hard-case regression:
+
+```bash
+uv run python scripts/training/train_lightgbm.py \
+  --dataset /path/to/normalized.csv \
+  --hard-cases /path/to/hard_cases.csv
+```
+
+## Tests
+
+```bash
+uv run pytest
+```
+
+or directly with the local venv:
+
+```bash
+.venv/bin/python -m pytest
+```
+
+## Troubleshooting
+
+### `uv run streamlit ...` -> `No such file or directory: streamlit`
+
+Install/update deps first:
+
+```bash
+uv sync
+```
+
+If you see a `VIRTUAL_ENV does not match` warning, run:
+
+```bash
+uv run --active streamlit run front/app.py
+```
+
+### LightGBM `libomp.dylib` missing (macOS)
+
+Install OpenMP runtime (Homebrew):
+
+```bash
+brew install libomp
+```
+
+Then rerun training.
 
 ## Project Structure
 
-```
+```text
 .
 ├── app/
-│   ├── __init__.py
-│   ├── main.py              # FastAPI application
-│   ├── models.py            # Pydantic models
-│   ├── domain_fetcher.py    # Tranco domain list fetcher
-│   ├── email_parser.py      # Email parsing utilities (HTML support)
-│   └── phishing_detector.py # Detection logic
+│   ├── api/
+│   │   ├── main.py
+│   │   └── schemas.py
+│   ├── detectors/
+│   │   └── ml_detector.py
+│   ├── features/
+│   │   ├── brand_signals.py
+│   │   └── email_feature_extractor.py
+│   ├── parsing/
+│   │   └── email_parser.py
+│   └── runtime/
+│       └── model_runtime.py
 ├── front/
-│   ├── __init__.py
-│   └── app.py               # Streamlit web interface
+│   └── app.py
+├── models/
+│   ├── phishing_lgbm_v1.txt
+│   ├── calibrator_v1.pkl
+│   └── feature_schema_v1.json
+├── scripts/
+│   └── training/
+│       ├── prepare_dataset.py
+│       └── train_lightgbm.py
 ├── tests/
-│   ├── test_api.py
-│   ├── test_email_parser.py
-│   └── test_phishing_detector.py
-├── main.py                  # FastAPI entry point
-├── pyproject.toml           # Project configuration
-└── README.md
+│   ├── integration/
+│   └── unit/
+└── main.py
 ```
-
-## Detection Logic
-
-### Risk Scoring
-
-- **Sender Domain** (40% weight):
-  - In top-1000 list: 0 points
-  - Levenshtein distance ≤ 2: 1.0 (maximum)
-  - Newly registered (< 30 days): 0.8
-  - Unknown domain: 0.5
-  
-- **Links** (40% weight):
-  - IP address in URL: 1.0
-  - Typosquatting domain: 1.0
-  - Newly registered (< 30 days): 0.7
-  - Unknown domain: 0.3
-
-- **Urgent Language** (20% weight):
-  - Patterns: "urgent", "immediately", "action required", "verify account", etc.
-  - Score based on number of matches (0.3 per match, capped at 1.0)
-
-### Risk Classification
-
-- **Seems safe** (< 0.33): No major indicators
-- **Few indicators found, need to be cautious** (0.33 - 0.5): Minor concerns
-- **Major indicators found!** (> 0.5): High risk
-
-## Development
-
-```bash
-# Format code
-uv run black app/ tests/ front/
-
-# Lint
-uv run ruff check app/ tests/ front/
-
-# Type checking
-uv run mypy app/
-```
-
-## Technology Stack
-
-**Backend:**
-- FastAPI - Web framework
-- Pydantic - Data validation
-- python-Levenshtein - Typosquatting detection
-- httpx - Async HTTP client for Tranco API
-- python-whois - WHOIS/RDAP domain age lookup
-- tldextract - Registrable domain normalization (Public Suffix List)
-- BeautifulSoup4 - HTML parsing for URL extraction
-- uvicorn - ASGI server
-
-**Frontend:**
-- Streamlit - Web UI framework
-- Plotly - Interactive gauge charts
-- Pandas - Data display
-- requests - HTTP client
-
-**Testing:**
-- pytest - Testing framework
-
-**Package Management:**
-- uv - Fast Python package manager

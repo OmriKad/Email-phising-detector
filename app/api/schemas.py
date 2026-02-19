@@ -1,5 +1,5 @@
 """Pydantic models for Gmail API format and detection responses."""
-from typing import Optional, List, Any
+from typing import Any, List, Literal, Optional
 from pydantic import BaseModel, Field
 
 
@@ -52,6 +52,18 @@ class DetectedIndicator(BaseModel):
     description: str = Field(..., description="Human-readable description of what was detected")
     severity: str = Field(..., description="Severity level: high, medium, low")
     details: Optional[dict] = Field(default=None, description="Additional details about the indicator")
+    contribution: Optional[float] = Field(
+        default=None,
+        description="Model contribution score for this indicator (higher means stronger phishing signal)",
+    )
+    evidence: Optional[List[str]] = Field(
+        default=None,
+        description="Short evidence strings for why this indicator was raised",
+    )
+    source: Optional[Literal["ml_feature", "ml_text"]] = Field(
+        default=None,
+        description="Detection source that produced this indicator",
+    )
 
 
 class PhishingDetectionResponse(BaseModel):
@@ -60,3 +72,14 @@ class PhishingDetectionResponse(BaseModel):
     classification: str = Field(..., description="Risk classification: Seems safe, Few indicators found, Major indicators found")
     indicators: List[DetectedIndicator] = Field(default_factory=list, description="List of detected phishing indicators")
     message: str = Field(..., description="Summary message about the detection results")
+    model_version: Optional[str] = Field(default=None, description="Model artifact version used for this detection")
+    decision_threshold: Optional[float] = Field(default=None, description="Decision threshold used by the detector")
+    raw_probability: Optional[float] = Field(default=None, description="Uncalibrated probability before post-processing")
+    guardrail_applied: Optional[bool] = Field(
+        default=None,
+        description="Whether deterministic guardrail policy escalated the final risk score",
+    )
+    guardrail_reasons: Optional[List[str]] = Field(
+        default=None,
+        description="Human-readable reasons for guardrail escalation",
+    )

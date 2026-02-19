@@ -53,6 +53,14 @@ htmlcov/
 # Cache
 cache/
 
+# Training data and non-runtime artifacts
+data/
+models/*
+!models/README.md
+!models/phishing_lgbm_v1.txt
+!models/calibrator_v1.pkl
+!models/feature_schema_v1.json
+
 # OS
 .DS_Store
 Thumbs.db

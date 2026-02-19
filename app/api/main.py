@@ -1,13 +1,14 @@
-"""FastAPI application for email phishing detection."""
+"""FastAPI application for ML-only phishing detection."""
+from __future__ import annotations
+
 import logging
-from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import JSONResponse
+
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi import Request
-from .models import GmailMessage, PhishingDetectionResponse
-from .phishing_detector import PhishingDetector
-from .domain_fetcher import domain_cache
+from fastapi.responses import JSONResponse
+
+from app.api.schemas import GmailMessage, PhishingDetectionResponse
+from app.detectors.ml_detector import MLPhishingDetector
 
 # Configure logging
 logging.basicConfig(
@@ -16,22 +17,13 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    """Application lifespan: initialize domain cache on startup."""
-    logger.info("Starting up: initializing domain cache...")
-    await domain_cache.initialize()
-    logger.info("Domain cache initialized successfully")
-    yield
-    logger.info("Shutting down...")
+_ml_detector = MLPhishingDetector()
 
 
 app = FastAPI(
     title="Email Phishing Detector",
-    description="Detect phishing attempts in email content using Gmail API format",
+    description="Detect phishing attempts in email content using local ML inference",
     version="1.0.0",
-    lifespan=lifespan
 )
 
 @app.exception_handler(RequestValidationError)
@@ -50,7 +42,7 @@ async def root():
     return {
         "message": "Email Phishing Detector API",
         "status": "running",
-        "domain_cache_initialized": domain_cache.is_initialized()
+        "engine": "ml",
     }
 
 
@@ -64,17 +56,20 @@ async def detect_phishing(message: GmailMessage) -> PhishingDetectionResponse:
     detailed indicators.
     """
     try:
-        # Ensure domain cache is initialized
-        if not domain_cache.is_initialized():
-            await domain_cache.initialize()
-        
-        # Create detector and analyze message
-        detector = PhishingDetector()
-        result = detector.detect(message)
-        
-        logger.info(f"Detection completed: score={result.risk_score}, classification={result.classification}")
+        if message.payload is None:
+            raise HTTPException(status_code=422, detail="Invalid Gmail message: payload is required")
+
+        result = _ml_detector.detect(message)
+
+        logger.info(
+            "Detection completed: engine=ml score=%.3f classification=%s",
+            result.risk_score,
+            result.classification,
+        )
         return result
         
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error during phishing detection: {e}", exc_info=True)
         raise HTTPException(
@@ -85,9 +80,23 @@ async def detect_phishing(message: GmailMessage) -> PhishingDetectionResponse:
 
 @app.get("/api/v1/health")
 async def health_check():
-    """Detailed health check endpoint."""
+    """Detailed ML runtime health check endpoint."""
+    runtime = _ml_detector.runtime
     return {
         "status": "healthy",
-        "domain_cache_initialized": domain_cache.is_initialized(),
-        "cached_domains": len(domain_cache.get_domains())
+        "engine": "ml",
+        "runtime": {
+            "model_version": runtime.model_version,
+            "default_threshold": runtime.default_threshold,
+            "model_loaded": runtime.booster is not None,
+            "calibrator_loaded": runtime.calibrator is not None,
+        },
+        "artifacts": {
+            "model_path": str(runtime.model_path),
+            "calibrator_path": str(runtime.calibrator_path),
+            "schema_path": str(runtime.schema_path),
+            "model_exists": runtime.model_path.exists(),
+            "calibrator_exists": runtime.calibrator_path.exists(),
+            "schema_exists": runtime.schema_path.exists(),
+        },
     }

@@ -203,6 +203,11 @@ def display_results(result: Dict[str, Any]):
     classification = result['classification']
     indicators = result['indicators']
     message = result['message']
+    model_version = result.get('model_version')
+    decision_threshold = result.get('decision_threshold')
+    raw_probability = result.get('raw_probability')
+    guardrail_applied = bool(result.get('guardrail_applied', False))
+    guardrail_reasons = result.get('guardrail_reasons') or []
     
     # Gauge chart
     col1, col2 = st.columns([1, 2])
@@ -237,6 +242,24 @@ def display_results(result: Dict[str, Any]):
         
         # Message
         st.info(message)
+
+        if raw_probability is not None:
+            if guardrail_applied:
+                st.caption(
+                    f"Model probability: {raw_probability:.1%} -> Guardrail-adjusted final risk: {risk_score:.1%}"
+                )
+            else:
+                st.caption(f"Model probability: {raw_probability:.1%}")
+
+        if model_version:
+            threshold_text = f", threshold={decision_threshold:.2f}" if decision_threshold is not None else ""
+            st.caption(f"Engine model: `{model_version}`{threshold_text}")
+
+        if guardrail_applied:
+            st.warning("Guardrail escalated this result based on high-confidence phishing patterns.")
+            if guardrail_reasons:
+                for reason in guardrail_reasons:
+                    st.write(f"- {reason}")
     
     # Detailed indicators
     if indicators:
@@ -260,6 +283,13 @@ def display_results(result: Dict[str, Any]):
             
             with st.expander(f"{emoji} **{indicator_type}** ({severity.upper()})", expanded=idx <= 2):
                 st.write(f"**Description:** {description}")
+
+                if indicator.get('contribution') is not None:
+                    st.write(f"**Contribution:** {indicator['contribution']:.4f}")
+                if indicator.get('evidence'):
+                    st.write("**Evidence:**")
+                    for item in indicator['evidence'][:3]:
+                        st.write(f"- {item}")
                 
                 if details:
                     st.write("**Details:**")

@@ -3,10 +3,13 @@ import re
 import base64
 import logging
 import ipaddress
+from pathlib import Path
 from typing import List, Optional
 from urllib.parse import urlparse
+
 import tldextract
-from .models import MessagePart, Header
+
+from app.api.schemas import Header, MessagePart
 
 try:
     from bs4 import BeautifulSoup
@@ -16,7 +19,11 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
-_DOMAIN_EXTRACTOR = tldextract.TLDExtract(suffix_list_urls=None)
+_TLD_CACHE_DIR = Path(__file__).resolve().parents[2] / "cache" / "tldextract"
+_DOMAIN_EXTRACTOR = tldextract.TLDExtract(
+    suffix_list_urls=None,
+    cache_dir=str(_TLD_CACHE_DIR),
+)
 
 
 def is_ip_address(hostname: Optional[str]) -> bool:
