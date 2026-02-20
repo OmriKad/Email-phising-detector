@@ -5,15 +5,6 @@ Local, CPU-only phishing detection service with:
 - Streamlit frontend (`front/app.py`)
 - ML-only runtime (LightGBM + calibrator + deterministic guardrails)
 
-## Current Runtime Model
-
-This project serves **ML only** (no heuristic engine, no Tranco/WHOIS runtime scoring).
-
-What is preserved:
-- API endpoint contract (`POST /api/v1/detect`, `GET /`, `GET /api/v1/health`)
-- UI-facing fields (`risk_score`, `classification`, `indicators`, `message`, `model_version`, `decision_threshold`, `raw_probability`, `guardrail_*`)
-- Explainability compatibility keys in indicator details (`impact_share`, `positive_impact_share`, `impact_basis`)
-
 ## Requirements
 
 - Python `>=3.11`
@@ -141,20 +132,6 @@ or directly with the local venv:
 ```
 
 ## Troubleshooting
-
-### `uv run streamlit ...` -> `No such file or directory: streamlit`
-
-Install/update deps first:
-
-```bash
-uv sync
-```
-
-If you see a `VIRTUAL_ENV does not match` warning, run:
-
-```bash
-uv run --active streamlit run front/app.py
-```
 
 ### LightGBM `libomp.dylib` missing (macOS)
 
