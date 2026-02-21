@@ -1,0 +1,21 @@
+.venv
+__pycache__
+.git
+.pytest_cache
+*.pyc
+*.pyo
+*.pyd
+.db
+.ipynb_checkpoints
+.vscode
+.idea
+.DS_Store
+scripts/
+gmail_addon/
+cache/
+README.md
+pyproject.toml
+uv.lock
+# Add exceptions for files we need in build context
+!pyproject.toml
+!uv.lock

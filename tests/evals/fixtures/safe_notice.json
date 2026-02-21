@@ -1,0 +1,21 @@
+{
+  "name": "safe_notice",
+  "request": {
+    "source": "api",
+    "message": {
+      "id": "fixture-2",
+      "payload": {
+        "headers": [
+          {"name": "From", "value": "noreply@example.com"},
+          {"name": "Subject", "value": "Welcome"}
+        ],
+        "mimeType": "text/plain",
+        "body": {"data": "V2VsY29tZSB0byBvdXIgc2VydmljZS4gTm8gYWN0aW9uIG5lZWRlZC4="}
+      }
+    }
+  },
+  "expectations": {
+    "verdict_any_of": ["safe", "suspicious"],
+    "min_triggers": 0
+  }
+}

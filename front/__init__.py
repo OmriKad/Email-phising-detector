@@ -1,1 +1,1 @@
-"""Streamlit frontend for Email Phishing Detector."""
+"""Streamlit frontend package."""

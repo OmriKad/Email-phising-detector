@@ -1,1 +1,1 @@
-"""Email phishing detector FastAPI application."""
+"""Email phishing detector application package."""

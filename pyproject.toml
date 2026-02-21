@@ -1,25 +1,31 @@
 [project]
-name = "assignment-1"
-version = "0.1.0"
-description = "Add your description here"
+name = "email-phishing-detector"
+version = "1.0.0"
+description = "LLM-first phishing detection service with strict API contracts"
+readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-    "beautifulsoup4>=4.14.3",
-    "fastapi>=0.128.0",
-    "httpx>=0.28.1",
-    "lxml>=6.0.2",
-    "pandas>=2.3.3",
-    "plotly>=6.5.2",
-    "python-levenshtein>=0.27.3",
-    "python-whois>=0.9.5",
-    "streamlit>=1.53.1",
-    "tldextract>=5.3.0",
-    "uvicorn>=0.40.0",
+  "beautifulsoup4>=4.14.3",
+  "email-validator>=2.3.0",
+  "fastapi>=0.128.0",
+  "httpx>=0.28.1",
+  "lxml>=6.0.2",
+  "mail-parser>=4.1.4",
+  "pydantic>=2.11.7",
+  "pydantic-ai>=0.0.66",
+  "requests>=2.32.5",
+  "streamlit>=1.53.1",
+  "tldextract>=5.3.0",
+  "urlextract>=1.9.0",
+  "uvicorn>=0.40.0"
 ]
 
 [dependency-groups]
 dev = [
-    "httpx>=0.28.1",
-    "pytest>=9.0.2",
-    "pytest-asyncio>=1.3.0",
+  "pytest>=9.0.2",
+  "pytest-asyncio>=1.3.0"
 ]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

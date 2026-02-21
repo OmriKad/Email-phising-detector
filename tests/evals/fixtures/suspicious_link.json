@@ -1,0 +1,21 @@
+{
+  "name": "suspicious_link",
+  "request": {
+    "source": "api",
+    "message": {
+      "id": "fixture-1",
+      "payload": {
+        "headers": [
+          {"name": "From", "value": "security@service.example.com"},
+          {"name": "Subject", "value": "Action required: verify your account"}
+        ],
+        "mimeType": "text/plain",
+        "body": {"data": "Q2xpY2sgaHR0cDovL2FjY291bnQtbG9naW4tdXBkYXRlLmV4YW1wbGUvbm93"}
+      }
+    }
+  },
+  "expectations": {
+    "verdict_any_of": ["suspicious", "likely_phishing"],
+    "min_triggers": 1
+  }
+}

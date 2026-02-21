@@ -1,224 +1,153 @@
-# Email Phishing Detector
+# Email Phishing Detector (PydanticAI + Streamlit)
 
-A FastAPI-based backend service with Streamlit web interface that analyzes email content for phishing indicators using Gmail API format.
+Production-minded phishing detection with:
+- FastAPI backend
+- PydanticAI agent (Ollama-compatible model runner)
+- Streamlit frontend
+- Frozen API response envelope (`schema_version = v1`)
 
-## Features
+## API Contract (v1)
 
-- **Streamlit Web Interface**: Interactive email composition form with visual risk analysis
-- **Gmail API Compatible**: Accepts email messages in Gmail API MessagePart format
-- **Multi-Indicator Detection**:
-  - Suspicious links (typosquatting, IP addresses, unknown domains)
-  - Spoofed sender domains (typosquatting detection)
-  - Urgent/pressure language patterns
-- **Weighted Scoring**: Combines indicators with configurable weights (sender 40%, links 40%, language 20%)
-- **Risk Classification**: Three-tier classification (safe, caution, major indicators)
-- **Domain Validation**: Uses Tranco top-1000 registrable domains with Levenshtein distance for typosquatting detection
-- **Domain Age Signal**: Flags domains younger than 30 days using WHOIS/RDAP lookups (cached)
-- **HTML Email Support**: Extracts URLs from HTML content (links, images, iframes) using BeautifulSoup
+`POST /api/v1/detect`
 
-## Requirements
-
-- Python 3.11+
-- uv package manager
-
-## Installation
-
-```bash
-# Install uv if not already installed
-curl -LsSf https://astral.sh/uv/install.sh | sh
-
-# Install dependencies
-uv sync
-```
-
-## Running the Application
-
-### Option 1: Full Stack (FastAPI Backend + Streamlit Frontend)
-
-**Terminal 1: Start FastAPI Backend**
-```bash
-uv run python main.py
-```
-The API will be available at `http://localhost:8000`
-
-**Terminal 2: Start Streamlit UI**
-```bash
-uv run streamlit run front/app.py
-```
-The web interface will be available at `http://localhost:8501`
-
-### Option 2: API Only
-
-```bash
-# Start the FastAPI development server
-uv run python main.py
-```
-
-The API will be available at `http://localhost:8000`
-
-## Streamlit Web Interface
-
-Access the web interface at `http://localhost:8501` to:
-- Compose emails with From, To, Subject, and Body (Plain Text/HTML)
-- Load pre-configured example emails (Safe, Typosquatting, Suspicious Links, Multiple Indicators)
-- Analyze emails with visual gauge chart showing risk score (0-100%)
-- View detailed phishing indicators with severity levels
-- Get color-coded classification alerts
-
-**Example Usage:**
-1. Click an example email button in the sidebar
-2. Or manually fill in the email composition form
-3. Switch between Plain Text and HTML tabs for body content
-4. Click "Analyze Email" to detect phishing indicators
-5. Review the gauge chart, metrics, and detailed findings
-
-## API Endpoints
-
-### `POST /api/v1/detect`
-
-Analyze an email for phishing indicators.
-
-**Request Body**: Gmail message in Gmail API format
-
+Request:
 ```json
 {
-  "id": "msg123",
-  "payload": {
-    "headers": [
-      {"name": "From", "value": "sender@example.com"},
-      {"name": "Subject", "value": "Email Subject"}
-    ],
-    "body": {"data": "base64url_encoded_content"},
-    "mimeType": "text/plain"
+  "source": "gmail_addon",
+  "message": {
+    "id": "msg-1",
+    "payload": {
+      "headers": [
+        {"name": "From", "value": "security@example.com"},
+        {"name": "Subject", "value": "Verify account"}
+      ],
+      "mimeType": "text/plain",
+      "body": {"data": "Q2xpY2sgaGVyZQ"}
+    }
   }
 }
 ```
 
-**Response**:
-
+Success response envelope:
 ```json
 {
-  "risk_score": 0.75,
-  "classification": "Major indicators found!",
-  "indicators": [
-    {
-      "type": "spoofed_sender",
-      "description": "Sender domain 'gogle' is similar to 'google' (typosquatting)",
-      "severity": "high",
-      "details": {
-        "sender_domain": "gogle",
-        "similar_to": "google",
-        "levenshtein_distance": 1
+  "schema_version": "v1",
+  "request_id": "uuid",
+  "result": {
+    "verdict": "likely_phishing",
+    "risk_score": 0.88,
+    "confidence": 0.79,
+    "summary": "Credential harvesting pattern detected.",
+    "triggers": [
+      {
+        "kind": "link",
+        "source_field": "body_text",
+        "value": "http://example-login-reset.com",
+        "reason": "Suspicious login reset domain",
+        "severity": "high"
       }
-    }
-  ],
-  "message": "🚨 Warning: 1 major phishing indicator(s) detected!"
+    ]
+  },
+  "error": null
 }
 ```
 
-### `GET /`
+Error response envelope:
+```json
+{
+  "schema_version": "v1",
+  "request_id": "uuid",
+  "result": null,
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Invalid request payload.",
+    "details": []
+  }
+}
+```
 
-Health check endpoint.
+## Normalization strategy
 
-### `GET /api/v1/health`
+Library-first extraction:
+- `mail-parser` for raw MIME (`message.raw`)
+- `email-validator` for sender/reply-to normalization
+- `BeautifulSoup` + `lxml` for HTML extraction
+- `urlextract` for URL extraction
+- `tldextract` for host normalization support
 
-Detailed health check with domain cache status.
+Normalized internal object fields:
+- `sender_email`
+- `reply_to_email`
+- `subject_text`
+- `body_text`
+- `body_html`
+- `urls[]`
 
-## Running Tests
+## Run locally
 
 ```bash
-# Run all tests
+uv sync
+uv run python main.py
+uv run streamlit run front/app.py
+```
+
+Backend: `http://localhost:8000`
+Frontend: `http://localhost:8501`
+
+## Run with Docker Compose
+
+Prerequisite:
+- Docker Desktop running locally.
+- Docker model runner (OpenAI-compatible) reachable at `http://host.docker.internal:11434`.
+
+Start the full stack (backend + frontend):
+```bash
+docker compose up --build
+```
+
+Run in detached mode:
+```bash
+docker compose up --build -d
+```
+
+Open:
+- Backend health: `http://localhost:8000/api/v1/health`
+- Frontend: `http://localhost:8501`
+
+The backend resolves model connectivity in this priority:
+1. `PHISHING_DETECT_URL` (injected by Compose `models:` wiring for `phishing-detect`)
+2. `OLLAMA_HOST` (fallback)
+
+Model name priority:
+1. `PHISHING_DETECT_MODEL`
+2. `OLLAMA_MODEL`
+
+View logs:
+```bash
+docker compose logs -f backend
+docker compose logs -f frontend
+```
+
+Stop the stack:
+```bash
+docker compose down
+```
+
+Troubleshooting `MODEL_PROVIDER_ERROR` / HTTP 502:
+1. Check backend health payload for resolved endpoint:
+   `curl http://localhost:8000/api/v1/health`
+2. Confirm `model_endpoint` is reachable from the backend container:
+   `docker compose exec backend sh -lc 'echo $PHISHING_DETECT_URL $OLLAMA_HOST'`
+3. If `PHISHING_DETECT_URL` is empty, verify your Docker Desktop model runner is installed/enabled.
+
+## Tests
+
+```bash
 uv run pytest
-
-# Run with coverage
-uv run pytest --cov=app
-
-# Run specific test file
-uv run pytest tests/test_phishing_detector.py
 ```
 
-## Project Structure
-
-```
-.
-├── app/
-│   ├── __init__.py
-│   ├── main.py              # FastAPI application
-│   ├── models.py            # Pydantic models
-│   ├── domain_fetcher.py    # Tranco domain list fetcher
-│   ├── email_parser.py      # Email parsing utilities (HTML support)
-│   └── phishing_detector.py # Detection logic
-├── front/
-│   ├── __init__.py
-│   └── app.py               # Streamlit web interface
-├── tests/
-│   ├── test_api.py
-│   ├── test_email_parser.py
-│   └── test_phishing_detector.py
-├── main.py                  # FastAPI entry point
-├── pyproject.toml           # Project configuration
-└── README.md
-```
-
-## Detection Logic
-
-### Risk Scoring
-
-- **Sender Domain** (40% weight):
-  - In top-1000 list: 0 points
-  - Levenshtein distance ≤ 2: 1.0 (maximum)
-  - Newly registered (< 30 days): 0.8
-  - Unknown domain: 0.5
-  
-- **Links** (40% weight):
-  - IP address in URL: 1.0
-  - Typosquatting domain: 1.0
-  - Newly registered (< 30 days): 0.7
-  - Unknown domain: 0.3
-
-- **Urgent Language** (20% weight):
-  - Patterns: "urgent", "immediately", "action required", "verify account", etc.
-  - Score based on number of matches (0.3 per match, capped at 1.0)
-
-### Risk Classification
-
-- **Seems safe** (< 0.33): No major indicators
-- **Few indicators found, need to be cautious** (0.33 - 0.5): Minor concerns
-- **Major indicators found!** (> 0.5): High risk
-
-## Development
-
+Optional integration/eval runs:
 ```bash
-# Format code
-uv run black app/ tests/ front/
-
-# Lint
-uv run ruff check app/ tests/ front/
-
-# Type checking
-uv run mypy app/
+RUN_MODEL_INTEGRATION=1 uv run pytest tests/integration
+RUN_EVALS=1 uv run pytest tests/evals
 ```
-
-## Technology Stack
-
-**Backend:**
-- FastAPI - Web framework
-- Pydantic - Data validation
-- python-Levenshtein - Typosquatting detection
-- httpx - Async HTTP client for Tranco API
-- python-whois - WHOIS/RDAP domain age lookup
-- tldextract - Registrable domain normalization (Public Suffix List)
-- BeautifulSoup4 - HTML parsing for URL extraction
-- uvicorn - ASGI server
-
-**Frontend:**
-- Streamlit - Web UI framework
-- Plotly - Interactive gauge charts
-- Pandas - Data display
-- requests - HTTP client
-
-**Testing:**
-- pytest - Testing framework
-
-**Package Management:**
-- uv - Fast Python package manager

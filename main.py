@@ -1,16 +1,11 @@
-"""Entry point for running the FastAPI application."""
+"""Run the backend ASGI app with uvicorn."""
+from __future__ import annotations
+
 import uvicorn
 
 
-def main():
-    """Run the FastAPI application with uvicorn."""
-    uvicorn.run(
-        "app.main:app",
-        host="0.0.0.0",
-        port=8000,
-        reload=True,
-        log_level="info"
-    )
+def main() -> None:
+    uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)
 
 
 if __name__ == "__main__":
